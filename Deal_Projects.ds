@@ -1,0 +1,591 @@
+/*
+ * Author       : mirland
+ * Generated on : 28-Aug-2025 08:29:13
+ * Version      : 1.0
+ */
+ application "Deal Projects"
+ {
+ 	date format = "dd-MMM-yyyy"
+ 	time zone = "America/Tijuana"
+ 	time format = "24-hr"
+ 	forms
+	{
+		form Deals
+		{
+			success message = "Deal Added Successfully"
+			Section
+			(
+				type = section
+	 			row = 1
+	 			column = 0   
+				width = medium
+			)
+			deals_id
+			(
+				type = picklist
+				maxchar = 100
+				values = {"Choice 1","Choice 2","Choice 3"}
+	 			row = 1
+	 			column = 1   
+				width = medium
+			)
+			fecha_go_live
+			(
+    			type = date
+				alloweddays = 0,1,2,3,4,5,6
+	 			row = 1
+	 			column = 1   
+				width = medium
+			)
+			plain
+			(
+    			type = plaintext
+				value = "Add your Note here ..."
+	 			row = 1
+	 			column = 1   
+				width = medium
+			)
+	
+			actions
+			{
+				on add
+				{
+					submit
+					(
+   						type = submit
+   						displayname = "Enviar"
+					)
+					reset
+					(
+   						type = reset
+   						displayname = "Restablecer"
+					)
+				}
+				on edit
+				{
+					update
+					(
+   						type = submit
+   						displayname = "Actualizar"
+					)
+					cancel
+					(
+   						type = cancel
+   						displayname = "Cancelar"
+					)
+				}
+			}
+		}
+	}
+	reports
+	{
+		default list All_Deals
+		{
+			displayName = "All Deals"
+			show all rows from Deals    
+			(
+				deals_id
+				fecha_go_live
+			)
+		}
+	}
+
+
+		 functions
+		 {
+			 Deluge
+			 {
+				 void Crear_Proyecto(string Deal, string Deal_id, date fecha_go_live)
+                 {
+                 	projectsPortals = invokeurl
+                 	[
+                 		url :"https://projectsapi.zoho.com/api/v3/portals"
+                 		type :GET
+                 		connection:"project_connection"
+                 	];
+                 	portals = projectsPortals.get(0);
+                 	portal_id = portals.get("portal_name");
+                 	project_name = Deal + " - Proyecto desde CRM";
+                 	project_map = Map();
+                 	project_map.put("name",project_name);
+                 	project_map.put("description","Proyecto creado automáticamente desde Zoho CRM");
+                 	// Se crea el proyecto 
+                 	create_project = invokeurl
+                 	[
+                 		url :"https://projectsapi.zoho.com/restapi/portal/" + portal_id + "/projects/"
+                 		type :POST
+                 		body:project_map
+                 		connection:"project_connection"
+                 	];
+                 	project_id = create_project.get("projects").get(0).get("id_string");
+                 	// Se crea tasklist
+                 	tasklist_map = Map();
+                 	tasklist_map.put("name","Lista inicial");
+                 	tasklist_map.put("description","Lista creada desde Zoho CRM");
+                 	create_tasklist = invokeurl
+                 	[
+                 		url :"https://projectsapi.zoho.com/restapi/portal/" + portal_id + "/projects/" + project_id + "/tasklists/"
+                 		type :POST
+                 		body:tasklist_map
+                 		connection:"project_connection"
+                 	];
+                 	// se crea él una lista con las variables a usar en las tareas
+                 	taskList = List();
+                 	taskMap1 = Map();
+                 	taskMap1.put("name","Tarea 1 - Analisis inicial");
+                 	taskMap1.put("days_of_separation",2);
+                 	taskMap1.put("description","Revisión de requisitos");
+                 	taskList.add(taskMap1);
+                 	taskMap2 = Map();
+                 	taskMap2.put("name","Tarea 2 - Desarrollo");
+                 	taskMap2.put("days_of_separation",5);
+                 	taskMap2.put("description","Construcción de la solución");
+                 	taskList.add(taskMap2);
+                 	taskMap3 = Map();
+                 	taskMap3.put("name","Tarea 3 - Entrega");
+                 	taskMap3.put("days_of_separation",10);
+                 	taskMap3.put("description","Entrega final al cliente");
+                 	taskList.add(taskMap3);
+                 	// Se recorre la lista anterior para crear las tareas y mantener el código más limpio
+                 	for each  task in taskList
+                 	{
+                 		tasklist_id = create_tasklist.get("tasklists").get(0).get("id");
+                 		//En este bloque se crean las fechas dando saltos en días con los intervalos de days_of_separation
+                 		current_date = fecha_go_live.addDay(task.get("days_of_separation").toLong());
+                 		start_iso = current_date.toString("MM-dd-yyyy");
+                 		end_date_obj = current_date.addDay(3);
+                 		end_iso = end_date_obj.toString("MM-dd-yyyy");
+                 		task1 = Map();
+                 		task1.put("name",task.get("name"));
+                 		task1.put("tasklist_id",tasklist_id.toString());
+                 		task1.put("start_date",start_iso);
+                 		task1.put("end_date",end_iso);
+                 		task1.put("description",task.get("description"));
+                 		info task1;
+                 		create_task1 = invokeurl
+                 		[
+                 			url :"https://projectsapi.zoho.com/restapi/portal/" + portal_id + "/projects/" + project_id + "/tasks/"
+                 			type :POST
+                 			body:task1
+                 			connection:"project_connection"
+                 		];
+                 		info create_task1;
+                 	}
+                 	// Se asocia el proyecto al trato en la sección de projects
+                 	mp = Map();
+                 	mp.put("name",project_name);
+                 	contdet = Map();
+                 	contdet.put("id",Deal_id);
+                 	mp.put("Deals",contdet.tolist());
+                 	datalist = List();
+                 	datalist.add(mp);
+                 	datamp = Map();
+                 	datamp.put("data",datalist);
+                 	resp = invokeurl
+                 	[
+                 		url :"https://www.zohoapis.com/crm/v2/Deals/" + Deal_id + "/Zoho_Projects/" + project_id
+                 		type :POST
+                 		parameters:datamp.toString()
+                 		connection:"associate_project_connection"
+                 	];
+                 	info resp;
+                 }
+			 }
+		 }
+		workflow
+		{
+		form
+		{
+			Init as "Init"
+			{
+				type =  form
+				form = Deals
+				record event = on add
+
+				on load
+				{
+					actions 
+					{
+						custom deluge script
+						(
+											deals = zoho.crm.getRecords("Deals");
+										idMap = Map();
+										for each  deal in deals
+										{
+											// 	idMap.put(deal.get("Deal_Name"),deal.get("id"));
+											input.deals_id:ui.add(deal.get("id"));
+											// 	alert deal;
+										}
+										// alert idMap;
+										// input.deals_id:ui.add(idMap);
+						)
+					}
+				}
+
+			}
+			envi_ as "envió"
+			{
+				type =  form
+				form = Deals
+				record event = on add or edit
+
+				on validate
+				{
+					actions 
+					{
+						custom deluge script
+						(
+											Deal_id = input.deals_id;
+										DealsData = zoho.crm.getRecordById("Deals",Deal_id.toLong());
+										Deal = DealsData.get("Deal_Name");
+										thisapp.Crear_Proyecto(Deal,Deal_id,input.fecha_go_live);
+						)
+					}
+				}
+
+			}
+			test as "test"
+			{
+				type =  form
+				form = Deals
+				record event = on edit
+					status = inactive
+
+				field rules
+				{
+				}
+
+			}
+			test2 as "test2"
+			{
+				type =  form
+				form = Deals
+				record event = on edit
+
+				on update of deals_id
+				{
+					actions 
+					{
+						custom deluge script
+						(
+											DealsData = zoho.crm.getRecordById("Deals",input.deals_id.toLong());
+										input.plain = DealsData;
+						)
+					}
+				}
+
+			}
+			test3 as "test3"
+			{
+				type =  form
+				form = Deals
+				record event = on add
+
+				on user input of deals_id
+				{
+					actions 
+					{
+						custom deluge script
+						(
+											DealsData = zoho.crm.getRecordById("Deals",input.deals_id.toLong());
+										input.plain = DealsData;
+						)
+					}
+				}
+
+			}
+		}
+
+
+
+
+
+
+	}
+	share_settings
+	{
+			"Read"
+			{
+				name = "Read"
+				type = Users_Permissions
+				permissions = {Chat:true, Predefined:true, ApiAccess:true, PIIAccess:true, ePHIAccess:true}
+				description = "This profile will have read permission for all components\n"
+			}
+			"Write"
+			{
+				name = "Write"
+				type = Users_Permissions
+				permissions = {Chat:true, Predefined:true, ApiAccess:true, PIIAccess:true, ePHIAccess:true}
+				description = "This profile will have write permission for all components\n"
+			}
+			"Developer"
+			{
+				name = "Developer"
+				type = Developer
+				permissions = {Chat:false, Predefined:true, ApiAccess:true, PIIAccess:true, ePHIAccess:true}
+				description = "Developer Profile\n"
+			}
+			"Administrator"
+			{
+				name = "Administrator"
+				type = Users_Permissions
+				permissions = {Chat:true, Predefined:true, ApiAccess:true, PIIAccess:true, ePHIAccess:true}
+				description = "This profile will have all the permissions.\n"
+			}
+			"Customer"
+			{
+				name = "Customer"
+				type = Customer_Portal
+				permissions = {Chat:true, Predefined:true, ApiAccess:true, PIIAccess:true, ePHIAccess:true}
+				description = "This is the default profile having only add and view permission.\n"
+			}
+			roles
+			{
+				"CEO"
+				{
+					description = "User belonging to this role can access data of all other users."
+				}
+			}
+	}
+
+
+	connections
+	{
+		project_connection
+		(
+			displayname = "project_connection"
+			connector = zohoprojects
+			permissions = {"add_users_to_a_project","associate_attachment","create_bug","create_client_company","create_milestone","create_project","create_task","create_task_list","create_time_log_for_a_task","disassociate_attachment","fetch_all_bugs","fetch_all_projects","fetch_all_tasks","fetch_bug","fetch_portals","fetch_project","fetch_task","get_all_events","get_all_fields","get_all_milestones","get_all_modules","get_all_project_attachments","get_all_project_users","get_all_task_lists","get_all_time_logs_for_a_task","get_attachment_details","get_projects_associated_to_a_client_company","search_across_projects","sync_bugs","sync_projects","sync_tasks","update_bug","update_milestone","update_project","update_task","update_task_list","update_time_log_for_a_task","upload_attachment"}
+		)
+		associate_project_connection
+		(
+			displayname = "associate_project_connection"
+			connector = zoho_oauth
+			permissions = {"ZohoCRM.modules.ALL","ZohoProjects.projects.ALL"}
+		)
+	}
+	web
+	{
+		forms
+		{
+			form Deals
+			{
+				label placement = left
+			}
+		}
+		reports
+		{
+			report All_Deals
+			{
+				quickview
+				(
+					layout
+					(
+		 				type = -1
+						datablock1
+						(
+							layout type = -1
+							fields
+							(
+								deals_id
+								fecha_go_live
+							)
+						)
+					)
+					menu
+    				(
+    	 				header
+    	 				(
+    		 				Edit 
+    		 				Duplicate 
+    		 				Delete 
+    	 				)
+						record
+						(
+							Edit   	   
+							Duplicate   	   
+							Delete   	   
+    					)
+    				)
+    				action
+    				(
+						on click
+						(
+							View Record   	   
+    					)
+						on right click
+						(
+							Edit   	   
+							Delete   	   
+							Duplicate   	   
+							View Record   	   
+    					)
+     				)
+				)
+
+				detailview
+				(
+					layout
+					(
+		 				type = 1
+						datablock1
+						(
+							layout type = -2
+							fields
+							(
+								deals_id
+								fecha_go_live
+							)
+						)
+					)
+					menu
+    				(
+    	 				header
+    	 				(
+    		 				Edit 
+    		 				Duplicate 
+    		 				Delete 
+    	 				)
+    				)
+				)
+			}
+		}
+		menu
+		{
+			space Space
+			{
+				displayname = "Space"
+				icon = "objects-spaceship"
+
+				section Deals
+				{
+					displayname = "Deals"
+					icon = "users-2-b-check"
+					form  Deals
+					{
+						icon = "users-2-b-check"
+					}
+					report All_Deals
+					{
+						icon = "tech-desktop"
+					}
+				}
+				section App_Preferences
+				{
+					displayname = "App Preferences"
+					icon = "design-app"
+					systemcomponent
+					{
+						type = localization
+						displayname = "Language Selection"
+						icon = "education-language"
+					}
+					systemcomponent
+					{
+						type = connection
+						displayname = "Integrations"
+						icon = "tech-2-connection"
+					}
+				}
+				section Approvals
+				{
+					displayname = "Approvals"
+					icon = "ui-2-hourglass"
+					systemcomponent
+					{
+						type = approval
+						approval status = pending
+						displayname = "Pending Tasks"
+						icon = "ui-2-hourglass"
+					}
+					systemcomponent
+					{
+						type = approval
+						approval status = completed
+						displayname = "Completed Tasks"
+						icon = "design-todo"
+					}
+				}
+				section SharedAnalytics_Section
+				{
+					type = shared_user_report_section
+					displayname = "Reports"
+					icon = "business-chart-bar-33"
+				}
+			}
+			preference
+			{
+				icon
+				{
+					style = outline
+				}
+			}
+		}
+		customize
+		{
+			new theme = 11
+			font = "lato"
+			color options
+			{
+				color = "1"
+			}
+			logo
+			{
+				preference = "none"
+				placement = "left"
+			}
+		}
+	}
+	phone
+	{
+		forms
+		{
+			form Deals
+			{
+				label placement = auto
+			}
+		}
+		customize
+		{
+			layout = slidingpane
+			font = "default"
+			style = "3"
+			color options
+			{
+				color = yellow
+			}
+			logo
+			{
+				preference = "none"
+			}
+		}
+	}
+	tablet
+	{
+		forms
+		{
+			form Deals
+			{
+				label placement = auto
+			}
+		}
+		customize
+		{
+			layout = slidingpane
+			font = "default"
+			style = "3"
+			color options
+			{
+				color = yellow
+			}
+			logo
+			{
+				preference = "none"
+			}
+		}
+	}
+	translation
+{
+{"Language_Settings":{"LANGAGUE_WITH_LOGIN":"browser"}}
+}
+}
