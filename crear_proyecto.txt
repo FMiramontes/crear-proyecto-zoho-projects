@@ -1,0 +1,101 @@
+
+void automation.Crear_Proyecto(String Deal,Int Deal_id)
+{
+
+// En este bloque se obtiene el portal 0 que es el default
+projectsPortals = invokeurl
+[
+	url: "https://projectsapi.zoho.com/api/v3/portals"
+	type: GET 
+	connection:"project_connection"
+];
+
+portals = projectsPortals.get(0);
+portal_id = portals.get("portal_name");
+
+project_name = Deal + " - Proyecto desde CRM";
+
+project_map = Map();
+project_map.put("name",project_name);
+project_map.put("description","Proyecto creado automáticamente desde Zoho CRM");
+// Se crea el proyecto 
+create_project = invokeurl
+[
+	url :"https://projectsapi.zoho.com/restapi/portal/" + portal_id + "/projects/"
+	type :POST
+	body:project_map
+	connection:"project_connection"
+];
+project_id = create_project.get("projects").get(0).get("id_string");
+// Se crea tasklist
+tasklist_map = Map();
+tasklist_map.put("name","Lista inicial");
+tasklist_map.put("description","Lista creada desde Zoho CRM");
+create_tasklist = invokeurl
+[
+	url :"https://projectsapi.zoho.com/restapi/portal/" + portal_id + "/projects/" + project_id + "/tasklists/"
+	type :POST
+	body:tasklist_map
+	connection:"project_connection"
+];
+// se crea él una lista con las variables a usar en las tareas
+taskList = List();
+taskMap1 = Map();
+taskMap1.put("name","Tarea 1 - Analisis inicial");
+taskMap1.put("days_of_separation",2);
+taskMap1.put("description","Revisión de requisitos");
+taskList.add(taskMap1);
+taskMap2 = Map();
+taskMap2.put("name","Tarea 2 - Desarrollo");
+taskMap2.put("days_of_separation",5);
+taskMap2.put("description","Construcción de la solución");
+taskList.add(taskMap2);
+taskMap3 = Map();
+taskMap3.put("name","Tarea 3 - Entrega");
+taskMap3.put("days_of_separation",10);
+taskMap3.put("description","Entrega final al cliente");
+taskList.add(taskMap3);
+// Se recorre la lista anterior para crear las tareas y mantener el código más limpio
+for each  task in taskList
+{
+	tasklist_id = create_tasklist.get("tasklists").get(0).get("id");
+	//En este bloque se crean las fechas dando saltos en días con los intervalos de days_of_separation
+	current_date = zoho.currenttime.addDay(task.get("days_of_separation").toLong());
+	start_iso = current_date.toString("MM-dd-yyyy");
+	end_date_obj = current_date.addDay(3);
+	end_iso = end_date_obj.toString("MM-dd-yyyy");
+	task1 = Map();
+	task1.put("name",task.get("name"));
+	task1.put("tasklist_id",tasklist_id.toString());
+	task1.put("start_date",start_iso);
+	task1.put("end_date",end_iso);
+	task1.put("description",task.get("description"));
+	info task1;
+	create_task1 = invokeurl
+	[
+		url :"https://projectsapi.zoho.com/restapi/portal/" + portal_id + "/projects/" + project_id + "/tasks/"
+		type :POST
+		body:task1
+		connection:"project_connection"
+	];
+	info create_task1;
+}
+// Se asocia el proyecto al trato en la sección de projects
+mp = Map();
+mp.put("name",project_name);
+contdet = Map();
+contdet.put("id",Deal_id);
+mp.put("Deals",contdet.tolist());
+datalist = List();
+datalist.add(mp);
+datamp = Map();
+datamp.put("data",datalist);
+resp = invokeurl
+[
+	url :"https://www.zohoapis.com/crm/v2/Deals/" + Deal_id + "/Zoho_Projects/" + project_id
+	type :POST
+	parameters:datamp.toString()
+	connection:"associate_project_connection"
+];
+info resp;
+}
